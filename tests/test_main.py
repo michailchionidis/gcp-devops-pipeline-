@@ -1,7 +1,8 @@
 import pytest
 import requests
-from main import extract_data, transform_data
 import pandas as pd
+from main import extract_data, transform_data
+import os
 
 @pytest.fixture
 def sample_raw_data():
@@ -38,11 +39,11 @@ def sample_raw_data():
 def test_extract_data(requests_mock, sample_raw_data):
     """Test the data extraction from the Weather API"""
     city = "London"
-    api_key = "fake_api_key"
+    api_key = os.getenv('API_KEY', 'fake_api_key')  # Use the environment variable or a default value
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
     requests_mock.get(url, json=sample_raw_data)
 
-    request_data = {"api_key": api_key, "city": city}
+    request_data = {"city": city}
 
     class Request:
         def __init__(self, json):
@@ -57,8 +58,6 @@ def test_extract_data(requests_mock, sample_raw_data):
 
     assert data["name"] == "London"
     assert data["weather"][0]["main"] == "Clear"
-
-    import pandas as pd
 
 def test_transform_data(sample_raw_data):
     """Test the data transformation into a DataFrame"""
@@ -92,7 +91,6 @@ def test_transform_data(sample_raw_data):
     assert df.at[0, "id"] == 2643743
     assert df.at[0, "name"] == "London"
     assert df.at[0, "cod"] == 200
-
 
 def test_transform_data_dtypes(sample_raw_data):
     """Test the data types of the transformed DataFrame"""
