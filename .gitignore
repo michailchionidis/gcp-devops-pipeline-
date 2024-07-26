@@ -7,3 +7,5 @@ venv/
 # Exclude the service account file
 src/*.json
 terraform/*.json
+devops.json
+.gitignore
