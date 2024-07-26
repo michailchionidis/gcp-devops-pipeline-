@@ -26,28 +26,51 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r src/requirements.txt
 
+    - name: Set environment variables
+      run: |
+        echo "API_KEY=${{ secrets.API_KEY }}" >> $GITHUB_ENV
+        echo "GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" >> $GITHUB_ENV
+        echo "GCP_DATASET_NAME=${{ secrets.GCP_DATASET_NAME }}" >> $GITHUB_ENV
+        echo "GCP_TABLE_NAME=${{ secrets.GCP_TABLE_NAME }}" >> $GITHUB_ENV
+
+    - name: Add src to PYTHONPATH
+      run: echo "PYTHONPATH=$PYTHONPATH:$(pwd)/src" >> $GITHUB_ENV
+
     - name: Run tests
       run: pytest tests/
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
 
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v1
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+    - name: Authenticate Docker to Artifact Registry
+      run: echo "${{ secrets.GCP_KEY }}" | base64 --decode > $HOME/gcp-key.json
 
-    - name: Build and push Docker image
+    - name: Log in to GCP
+      run: gcloud auth activate-service-account --key-file=$HOME/gcp-key.json
+
+    - name: Configure Docker to use Artifact Registry
+      run: gcloud auth configure-docker europe-west1-docker.pkg.dev
+
+    - name: Create Artifact Registry repository if it doesn't exist
       run: |
-        docker buildx build --platform linux/amd64 --push -t ${{ secrets.DOCKER_USERNAME }}/gcp-devops-project:latest .
+        gcloud artifacts repositories create gcp-devops-project \
+          --project ${{ secrets.GCP_PROJECT_ID }} \
+          --repository-format=docker \
+          --location=europe-west1 \
+          --description="Docker repository for gcp-devops-project" || echo "Repository already exists"
+
+    - name: Build and push Docker image to Artifact Registry
+      env:
+        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      run: |
+        docker buildx build --platform linux/amd64 --push -t europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcp-devops-project/gcp-devops-project:latest .
 
     - name: Deploy to Google Cloud Run
       env:
         PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         SERVICE_NAME: gcp-devops-project
-        IMAGE: gcr.io/${{ secrets.GCP_PROJECT_ID }}/gcp-devops-project
+        IMAGE: europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcp-devops-project/gcp-devops-project:latest
       run: |
-        echo ${{ secrets.GCP_KEY }} | gcloud auth activate-service-account --key-file=-
+        gcloud auth activate-service-account --key-file=$HOME/gcp-key.json
         gcloud --quiet config set project $PROJECT_ID
-        gcloud run deploy $SERVICE_NAME --image $IMAGE --platform managed --region us-central1 --allow-unauthenticated
+        gcloud run deploy $SERVICE_NAME --image $IMAGE --platform managed --region europe-west1 --allow-unauthenticated
