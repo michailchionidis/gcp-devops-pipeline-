@@ -70,7 +70,10 @@ jobs:
         PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         SERVICE_NAME: gcp-devops-project
         IMAGE: europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/gcp-devops-project/gcp-devops-project:latest
+        API_KEY: ${{ secrets.API_KEY }}
+        GCP_DATASET_NAME: ${{ secrets.GCP_DATASET_NAME }}
+        GCP_TABLE_NAME: ${{ secrets.GCP_TABLE_NAME }}
       run: |
         gcloud auth activate-service-account --key-file=$HOME/gcp-key.json
         gcloud --quiet config set project $PROJECT_ID
-        gcloud run deploy $SERVICE_NAME --image $IMAGE --platform managed --region europe-west1 --allow-unauthenticated
+        gcloud run deploy $SERVICE_NAME --image $IMAGE --platform managed --region europe-west1 --allow-unauthenticated --update-env-vars API_KEY=${{ secrets.API_KEY }},GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GCP_DATASET_NAME=${{ secrets.GCP_DATASET_NAME }},GCP_TABLE_NAME=${{ secrets.GCP_TABLE_NAME }}
